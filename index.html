@@ -11,8 +11,9 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a1730">
 
-<link rel="apple-touch-icon" href="logo.png">
-<link rel="icon" href="logo.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon.png">
 
 <title>BMP Diamond IQ</title>
 
@@ -72,9 +73,10 @@ html, body {
 }
 
 .brand-logo {
-  height: 42px; width: auto;
-  filter: drop-shadow(0 0 6px rgba(77, 201, 255, 0.4));
+  height: 48px; width: auto;
+  filter: drop-shadow(0 0 8px rgba(77, 201, 255, 0.5));
   flex-shrink: 0;
+  margin-right: 4px;
 }
 
 .brand-text {
@@ -284,7 +286,7 @@ html, body {
 @media (max-width: 500px) {
   #hint { display: none; }
   .brand-text .tagline { display: none; }
-  .brand-logo { height: 36px; }
+  .brand-logo { height: 42px; }
   .brand-text h1 { font-size: 1rem; }
 }
 </style>
@@ -354,10 +356,12 @@ const canvas = document.getElementById('field');
 const ctx = canvas.getContext('2d');
 
 /* ── Field geometry (logical units, home is pivot at bottom) ── */
-const L = 700;
+/* Logical canvas is 820 wide x 700 tall so foul lines + poles fit fully */
+const L_W = 820;
+const L_H = 700;
 let sc = 1;
 
-const HOME_X   = 350;
+const HOME_X   = 410;   /* centered horizontally in the wider canvas */
 const HOME_Y   = 610;
 const BASE_LEN = 160;
 const INFIELD_R = 225;
@@ -414,14 +418,25 @@ function defaultPlayers() {
 }
 players = defaultPlayers();
 
-/* ── Canvas resize ── */
+/* ── Canvas resize — preserve field aspect ratio (820:700) so the whole field fits ── */
 function resize() {
   const wrap = document.getElementById('field-wrap');
   const wr = wrap.getBoundingClientRect();
-  const s = Math.round(Math.min(wr.width, wr.height));
-  canvas.width  = s;
-  canvas.height = s;
-  sc = s / L;
+  const targetAspect = L_W / L_H;         /* field aspect */
+  const availAspect  = wr.width / wr.height;
+  let w, h;
+  if (availAspect > targetAspect) {
+    /* Screen wider than field — fit by height */
+    h = Math.round(wr.height);
+    w = Math.round(h * targetAspect);
+  } else {
+    /* Screen taller than field — fit by width */
+    w = Math.round(wr.width);
+    h = Math.round(w / targetAspect);
+  }
+  canvas.width  = w;
+  canvas.height = h;
+  sc = w / L_W;   /* uniform scale — aspect preserved */
   draw();
 }
 window.addEventListener('resize', resize);
@@ -461,13 +476,13 @@ function fanPath() {
 }
 
 function drawField() {
-  const S = canvas.width;
+  const W = canvas.width, H = canvas.height;
   const hx = tx(HOME_X), hy = tx(HOME_Y);
-  ctx.clearRect(0, 0, S, S);
+  ctx.clearRect(0, 0, W, H);
 
   /* 1. Background */
   ctx.fillStyle = '#0a1730';
-  ctx.fillRect(0, 0, S, S);
+  ctx.fillRect(0, 0, W, H);
 
   /* 2. Outfield grass */
   ctx.save();
@@ -477,12 +492,12 @@ function drawField() {
   og.addColorStop(0.5, '#196830');
   og.addColorStop(1,   '#0f5020');
   ctx.fillStyle = og;
-  ctx.fillRect(0, 0, S, S);
+  ctx.fillRect(0, 0, W, H);
   /* mowing stripes */
   const sw = tx(28);
-  for (let x = 0; x < S; x += sw * 2) {
+  for (let x = 0; x < W; x += sw * 2) {
     ctx.fillStyle = 'rgba(0,0,0,0.07)';
-    ctx.fillRect(x, 0, sw, S);
+    ctx.fillRect(x, 0, sw, H);
   }
   ctx.restore();
 
@@ -520,6 +535,65 @@ function drawField() {
   });
   ctx.restore();
 
+  /* 5b. Yellow foul poles with mesh screen (top-down view) */
+  /* Each pole has a screen extending into fair territory perpendicular to the foul line */
+  [
+    { ang: ANG_1ST, screenAng: ANG_1ST - Math.PI / 2 },   /* 1st base: screen extends up-left */
+    { ang: ANG_3RD, screenAng: ANG_3RD + Math.PI / 2 },   /* 3rd base: screen extends up-right */
+  ].forEach(({ ang, screenAng }) => {
+    const px = tx(HOME_X + OF_R * Math.cos(ang));
+    const py = tx(HOME_Y + OF_R * Math.sin(ang));
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(screenAng);   /* rotate so +X axis points into fair territory */
+
+    const screenLen = tx(28);    /* how far the mesh extends into the field */
+    const screenW   = tx(10);    /* thickness of mesh screen */
+    const poleR     = tx(5);     /* pole cap radius */
+
+    /* Bright yellow mesh screen */
+    ctx.fillStyle = '#ffdd2e';
+    ctx.shadowColor = '#ffe033';
+    ctx.shadowBlur = tx(8);
+    ctx.fillRect(0, -screenW / 2, screenLen, screenW);
+    ctx.shadowBlur = 0;
+
+    /* Dark outline for definition against grass */
+    ctx.strokeStyle = 'rgba(70,50,0,0.7)';
+    ctx.lineWidth = tx(1.2);
+    ctx.strokeRect(0, -screenW / 2, screenLen, screenW);
+
+    /* Mesh crosshatch pattern (fine vertical lines for texture) */
+    ctx.strokeStyle = 'rgba(180,130,0,0.45)';
+    ctx.lineWidth = tx(0.5);
+    for (let x = tx(2); x < screenLen; x += tx(3)) {
+      ctx.beginPath();
+      ctx.moveTo(x, -screenW / 2 + tx(1));
+      ctx.lineTo(x, screenW / 2 - tx(1));
+      ctx.stroke();
+    }
+
+    /* Pole cap (circular top of pole, at the base of the screen) */
+    ctx.beginPath();
+    ctx.arc(0, 0, poleR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffdd2e';
+    ctx.shadowColor = '#ffe033';
+    ctx.shadowBlur = tx(12);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(70,50,0,0.75)';
+    ctx.lineWidth = tx(1.2);
+    ctx.stroke();
+    /* Highlight dot for 3D pole feel */
+    ctx.beginPath();
+    ctx.arc(-poleR * 0.3, -poleR * 0.3, poleR * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,220,0.7)';
+    ctx.fill();
+
+    ctx.restore();
+  });
+
   /* 6. Infield dirt arc (extended past 2nd base) */
   const DIRT_ANG_START = ANG_3RD - Math.PI * 0.22;
   const DIRT_ANG_END   = ANG_1ST + Math.PI * 0.22;
@@ -547,9 +621,9 @@ function drawField() {
   ctx.closePath();
   ctx.fillStyle = '#1a6832'; ctx.fill();
   ctx.clip();
-  for (let x = 0; x < S; x += tx(26) * 2) {
+  for (let x = 0; x < W; x += tx(26) * 2) {
     ctx.fillStyle = 'rgba(0,0,0,0.06)';
-    ctx.fillRect(x, 0, tx(26), S);
+    ctx.fillRect(x, 0, tx(26), H);
   }
   ctx.restore();
 
