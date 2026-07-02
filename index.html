@@ -386,7 +386,7 @@ let arrows = [];
 let drawingArrow = null;
 let players = [];
 let runners = { first: null, second: null, third: null };
-let ball = { x: MOUND_X, y: MOUND_Y };
+let ball = { x: HOME_X, y: HOME_Y };
 let dragTarget = null;
 let longPressTimer = null;
 
@@ -942,7 +942,7 @@ document.getElementById('btnReset').addEventListener('click', function() {
   snapshot();
   players = defaultPlayers();
   runners = { first: null, second: null, third: null };
-  ball = { x: MOUND_X, y: MOUND_Y };
+  ball = { x: HOME_X, y: HOME_Y };
   arrows = [];
   draw();
   toast('Field reset');
